@@ -13,13 +13,16 @@ const isBrokenAllOfItem = (item: SchemaObject | ReferenceObject): item is Schema
     );
 };
 
-export function inferRequiredSchema(schema: SchemaObject) {
+export function inferRequiredSchema(schema: SchemaObject, parentRequired?: string[]) {
     if (!schema.allOf) {
         throw new Error(
             "function inferRequiredSchema is specialized to handle item with required only in an allOf array."
         );
     }
     
+    // Merge parent required fields (from the parent schema) with requireds from allOf items
+    const mergedRequired = new Set([...(parentRequired ?? []), ...((schema.required ?? []))]);
+
     const [standaloneRequisites, noRequiredOnlyAllof] = schema.allOf.reduce(
         (acc, cur) => {
             if (isBrokenAllOfItem(cur)) {
@@ -34,8 +37,9 @@ export function inferRequiredSchema(schema: SchemaObject) {
         [[], []] as [string[], Array<SchemaObject | ReferenceObject>]
     );
 
+    // Use mergedRequired as the definitive required fields
     const composedRequiredSchema = {
-        properties: standaloneRequisites.reduce(
+        properties: Array.from(mergedRequired).reduce(
             (acc, cur) => {
                 acc[cur] = {
                     // type: "unknown" as SchemaObject["type"],
@@ -47,8 +51,9 @@ export function inferRequiredSchema(schema: SchemaObject) {
             }
         ),
         type: "object" as const,
-        required: standaloneRequisites,
+        required: Array.from(mergedRequired),
     };
+
 
     return {
         noRequiredOnlyAllof,

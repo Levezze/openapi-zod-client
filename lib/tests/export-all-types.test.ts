@@ -106,9 +106,9 @@ describe("export-all-types", () => {
                 Settings: "z.object({ theme_color: z.string(), features: Features.min(1) }).partial().passthrough()",
                 Author: "z.object({ name: z.union([z.string(), z.number()]).nullable(), title: Title.min(1).max(30), id: Id, mail: z.string(), settings: Settings }).partial().passthrough()",
                 Features: "z.array(z.string())",
-                Song: "z.object({ name: z.string(), duration: z.number() }).partial().passthrough()",
                 Playlist:
                     "z.object({ name: z.string(), author: Author, songs: z.array(Song) }).partial().passthrough().and(Settings)",
+                Song: "z.object({ name: z.string(), duration: z.number() }).partial().passthrough()",
                 Title: "z.string()",
                 Id: "z.number()",
             },

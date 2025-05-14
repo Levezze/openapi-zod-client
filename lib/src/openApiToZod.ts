@@ -1,4 +1,5 @@
 import { isSchemaObject, type ReferenceObject, type SchemaObject } from "openapi3-ts";
+import { debugLogToFile } from "./debugFileLogger";
 import { match } from "ts-pattern";
 
 import type { CodeMetaData, ConversionTypeContext } from "./CodeMeta";
@@ -21,6 +22,15 @@ type ConversionArgs = {
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, options }: ConversionArgs): CodeMeta {
+    // Debug every schema processed (top-level)
+    const debugKeys = $schema ? Object.keys($schema) : [];
+    debugLogToFile("[DEBUG schema processed] keys:", debugKeys, "| title:", (typeof $schema === 'object' && 'title' in $schema) ? $schema.title : undefined, "| description:", (typeof $schema === 'object' && 'description' in $schema) ? $schema.description : undefined);
+    if ($schema && ($schema as any).$ref) {
+        debugLogToFile("[DEBUG schema processed - $ref]", ($schema as any).$ref);
+    }
+    if ($schema && ($schema as any).allOf) {
+        debugLogToFile("[DEBUG schema processed - allOf]", JSON.stringify(($schema as any).allOf, null, 2));
+    }
     if (!$schema) {
         throw new Error("Schema is required");
     }
@@ -37,8 +47,10 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
         .map((prev) => (ctx ? ctx.resolver.resolveRef(prev.ref!).normalized : prev.ref!));
 
     if (isReferenceObject(schema)) {
+        // Debug every $ref processed
+        debugLogToFile("[DEBUG $ref]", schema.$ref);
         if (schema.$ref && schema.$ref.toLowerCase().includes("registeruser")) {
-            console.log("[REGISTER REF DEBUG] $ref found:", schema.$ref);
+            debugLogToFile("[REGISTER REF DEBUG] $ref found:", schema.$ref);
         }
 
         if (!ctx) throw new Error("Context is required");
@@ -138,8 +150,10 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
     }
 
     if (schema.allOf) {
+        // Debug every allOf processed
+        debugLogToFile("[DEBUG allOf] schema:", JSON.stringify(schema, null, 2));
         if (schema.allOf && (schema.title?.toLowerCase().includes("register") || schema.description?.toLowerCase().includes("register"))) {
-            console.log("[REGISTER DEBUG - allOf]", JSON.stringify(schema, null, 2));
+            debugLogToFile("[REGISTER DEBUG - allOf]", JSON.stringify(schema, null, 2));
         }
         
         if (schema.allOf.length === 1) {
@@ -147,7 +161,7 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
             return code.assign(type.toString());
         }
 
-        const { patchRequiredSchemaInLoop, noRequiredOnlyAllof, composedRequiredSchema } = inferRequiredSchema(schema);
+        const { patchRequiredSchemaInLoop, noRequiredOnlyAllof, composedRequiredSchema } = inferRequiredSchema(schema, schema.required);
 
         const types = noRequiredOnlyAllof.map((prop) => {
             const zodSchema = getZodSchema({ schema: prop, ctx, meta, options });
@@ -261,10 +275,10 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
         }
 
         if (schema && (schema.title?.toLowerCase().includes("register") || schema.description?.toLowerCase().includes("register"))) {
-            console.log("[REGISTER DEBUG]", JSON.stringify(schema, null, 2));
+            debugLogToFile("[REGISTER DEBUG]", JSON.stringify(schema, null, 2));
         }
         
-        console.log(
+        debugLogToFile(
             "[DEBUG] schema.required:",
             schema.required,
             "| Array.isArray:", Array.isArray(schema.required),
