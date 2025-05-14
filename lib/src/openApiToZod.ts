@@ -162,7 +162,21 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
             .map((type) => `and(${type.toString()})`)
             .join(".");
 
-        return code.assign(`${first.toString()}.${rest}`);
+        // Check for empty required arrays ONLY for allOf schemas
+        // This is a targeted fix that only affects allOf schema handling in very specific cases
+        const withImplicitRequired = options?.withImplicitRequiredProps === true;
+        const hasEmptyRequiredInParent = Array.isArray(schema.required) && schema.required.length === 0;
+        const hasEmptyRequiredInAllOf = schema.allOf.some(item => 
+            !isReferenceObject(item) && Array.isArray(item.required) && item.required.length === 0
+        );
+        
+        // Only apply .partial() for empty required arrays when using implicit required mode
+        const shouldApplyPartialForEmptyRequired = withImplicitRequired && (hasEmptyRequiredInParent || hasEmptyRequiredInAllOf);
+        
+        const finalCode = `${first.toString()}.${rest}`;
+        
+        // Only apply .partial() in implicit-required mode with empty required arrays
+        return code.assign(shouldApplyPartialForEmptyRequired ? `${finalCode}.partial()` : finalCode);
     }
 
     const schemaType = schema.type ? (schema.type.toLowerCase() as NonNullable<typeof schema.type>) : undefined;
