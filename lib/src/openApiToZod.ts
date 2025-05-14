@@ -37,6 +37,10 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
         .map((prev) => (ctx ? ctx.resolver.resolveRef(prev.ref!).normalized : prev.ref!));
 
     if (isReferenceObject(schema)) {
+        if (schema.$ref && schema.$ref.toLowerCase().includes("registeruser")) {
+            console.log("[REGISTER REF DEBUG] $ref found:", schema.$ref);
+        }
+
         if (!ctx) throw new Error("Context is required");
 
         const schemaName = ctx.resolver.resolveRef(schema.$ref)?.normalized;
@@ -134,6 +138,10 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
     }
 
     if (schema.allOf) {
+        if (schema.allOf && (schema.title?.toLowerCase().includes("register") || schema.description?.toLowerCase().includes("register"))) {
+            console.log("[REGISTER DEBUG - allOf]", JSON.stringify(schema, null, 2));
+        }
+        
         if (schema.allOf.length === 1) {
             const type = getZodSchema({ schema: schema.allOf[0]!, ctx, meta, options });
             return code.assign(type.toString());
@@ -251,6 +259,18 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
                 ).toString()})`
             );
         }
+
+        if (schema && (schema.title?.toLowerCase().includes("register") || schema.description?.toLowerCase().includes("register"))) {
+            console.log("[REGISTER DEBUG]", JSON.stringify(schema, null, 2));
+        }
+        
+        console.log(
+            "[DEBUG] schema.required:",
+            schema.required,
+            "| Array.isArray:", Array.isArray(schema.required),
+            "| Length:", Array.isArray(schema.required) ? schema.required.length : "N/A",
+            "| Schema title:", schema.title ?? schema.description ?? ""
+        );
 
         const isPartial = options?.withImplicitRequiredProps ? false : !(Array.isArray(schema.required) && schema.required.length > 0);
         let properties = "{}";
