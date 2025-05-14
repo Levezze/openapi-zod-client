@@ -89,7 +89,7 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
 
         /* when there are multiple allOf we are unable to use a discriminatedUnion as this library adds an
          *   'z.and' to the schema that it creates which breaks type inference */
-        const hasMultipleAllOf = schema.oneOf?.some((obj) => isSchemaObject(obj) && (obj?.allOf || []).length > 1);
+        const hasMultipleAllOf = schema.oneOf?.some((obj) => isSchemaObject(obj) && (obj?.allOf ?? []).length > 1);
         if (schema.discriminator && !hasMultipleAllOf) {
             const propertyName = schema.discriminator.propertyName;
 
@@ -138,6 +138,7 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
             const type = getZodSchema({ schema: schema.allOf[0]!, ctx, meta, options });
             return code.assign(type.toString());
         }
+
         const { patchRequiredSchemaInLoop, noRequiredOnlyAllof, composedRequiredSchema } = inferRequiredSchema(schema);
 
         const types = noRequiredOnlyAllof.map((prop) => {
@@ -146,7 +147,7 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
             return zodSchema;
         });
 
-        if (composedRequiredSchema.required.length) {
+        if (composedRequiredSchema.required.length > 0) {
             types.push(
                 getZodSchema({
                     schema: composedRequiredSchema,
@@ -156,27 +157,14 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
                 })
             );
         }
+
         const first = types.at(0)!;
         const rest = types
             .slice(1)
             .map((type) => `and(${type.toString()})`)
             .join(".");
 
-        // Check for empty required arrays ONLY for allOf schemas
-        // This is a targeted fix that only affects allOf schema handling in very specific cases
-        const withImplicitRequired = options?.withImplicitRequiredProps === true;
-        const hasEmptyRequiredInParent = Array.isArray(schema.required) && schema.required.length === 0;
-        const hasEmptyRequiredInAllOf = schema.allOf.some(item => 
-            !isReferenceObject(item) && Array.isArray(item.required) && item.required.length === 0
-        );
-        
-        // Only apply .partial() for empty required arrays when using implicit required mode
-        const shouldApplyPartialForEmptyRequired = withImplicitRequired && (hasEmptyRequiredInParent || hasEmptyRequiredInAllOf);
-        
-        const finalCode = `${first.toString()}.${rest}`;
-        
-        // Only apply .partial() in implicit-required mode with empty required arrays
-        return code.assign(shouldApplyPartialForEmptyRequired ? `${finalCode}.partial()` : finalCode);
+        return code.assign(`${first.toString()}.${rest}`);
     }
 
     const schemaType = schema.type ? (schema.type.toLowerCase() as NonNullable<typeof schema.type>) : undefined;
@@ -190,9 +178,8 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
                 }
 
                 // eslint-disable-next-line sonarjs/no-nested-template-literals
-                return code.assign(
-                    `z.enum([${schema.enum.map((value) => (value === null ? "null" : `"${value}"`)).join(", ")}])`
-                );
+                const enumValues = schema.enum.map((value) => (value === null ? "null" : `"${value}"`)).join(", ");
+                return code.assign(`z.enum([${enumValues}])`);
             }
 
             if (schema.enum.some((e) => typeof e === "string")) {
@@ -265,8 +252,7 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
             );
         }
 
-        const hasRequiredArray = schema.required && schema.required.length > 0;
-        const isPartial = options?.withImplicitRequiredProps ? false : !schema.required?.length;
+        const isPartial = options?.withImplicitRequiredProps ? false : !(Array.isArray(schema.required) && schema.required.length > 0);
         let properties = "{}";
 
         if (schema.properties) {
@@ -275,9 +261,9 @@ export function getZodSchema({ schema: $schema, ctx, meta: inheritedMeta, option
                     ...meta,
                     isRequired: isPartial
                         ? true
-                        : hasRequiredArray
-                        ? schema.required?.includes(prop)
-                        : options?.withImplicitRequiredProps,
+                        : schema.required?.includes(prop)
+                        ? true
+                        : options?.withImplicitRequiredProps ?? false,
                     name: prop,
                 } as CodeMetaData;
 
